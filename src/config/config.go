@@ -1,12 +1,13 @@
 package config
 
 // Secrets defined for the application
+// All fields default to empty strings if not set via Encore secrets
 var secrets struct {
-	GroqAPIKey       string // API key for Groq service
-	OpenRouterAPIKey string // API key for OpenRouter service
-	GeminiAPIKey     string // API key for Gemini service
-	AtlasAPIKey      string // API key for Atlas service
-	ChutesAPIKey     string // API key for Chutes service
+	GroqAPIKey       string // API key for Groq service (defaults to "")
+	OpenRouterAPIKey string // API key for OpenRouter service (defaults to "")
+	GeminiAPIKey     string // API key for Gemini service (defaults to "")
+	AtlasAPIKey      string // API key for Atlas service (defaults to "")
+	ChutesAPIKey     string // API key for Chutes service (defaults to "")
 }
 
 // Config holds application configuration
@@ -18,6 +19,7 @@ func LoadConfig() *Config {
 }
 
 // GetAPIKey returns the API key for the specified provider
+// Returns empty string if provider not found or API key not set
 func (c *Config) GetAPIKey(provider string) string {
 	switch provider {
 	case "groq":
@@ -31,8 +33,13 @@ func (c *Config) GetAPIKey(provider string) string {
 	case "chutes":
 		return secrets.ChutesAPIKey
 	default:
-		return ""
+		return "" // Empty string for unknown providers
 	}
+}
+
+// HasAPIKey checks if a provider has a non-empty API key configured
+func (c *Config) HasAPIKey(provider string) bool {
+	return c.GetAPIKey(provider) != ""
 }
 
 // GetSupportedProviders returns list of supported providers
