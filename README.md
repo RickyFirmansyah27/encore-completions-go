@@ -45,38 +45,67 @@ encore-completion-go/
 
 ## Getting Started
 
-1. **Set up environment variables**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your API keys
-   ```
+### 1. Set up Encore secrets for API keys
 
-2. **Install dependencies**:
-   ```bash
-   go mod tidy
-   ```
+This project uses Encore's secure secrets management. You have several options:
 
-3. **Run with Encore**:
-   ```bash
-   encore run
-   ```
+**Option A: Using Encore Cloud Dashboard**
+1. Go to your app in [Encore Cloud Dashboard](https://app.encore.cloud)
+2. Navigate to Settings > Secrets
+3. Add the following secrets:
+   - `GroqAPIKey`
+   - `OpenRouterAPIKey` 
+   - `GeminiAPIKey`
+   - `AtlasAPIKey`
+   - `ChutesAPIKey`
 
-4. **Or run directly**:
-   ```bash
-   go run main.go
-   ```
+**Option B: Using Encore CLI**
+```bash
+# Set secrets for local/development environment
+encore secret set --type local,dev GroqAPIKey
+encore secret set --type local,dev OpenRouterAPIKey
+encore secret set --type local,dev GeminiAPIKey
+encore secret set --type local,dev AtlasAPIKey
+encore secret set --type local,dev ChutesAPIKey
 
-## Environment Variables
-
-Configure the following environment variables in your `.env` file:
-
-```env
-GROQ_API_KEY=your_groq_api_key_here
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-GEMINI_API_KEY=your_gemini_api_key_here
-ATLASCLOUD_API_KEY=your_atlas_api_key_here
-CHUTES_API_KEY=your_chutes_api_key_here
+# Set secrets for production
+encore secret set --type prod GroqAPIKey
+# ... repeat for other secrets
 ```
+
+**Option C: Local development override**
+For local development, copy and edit the secrets file:
+```bash
+cp .secrets.local.cue.example .secrets.local.cue
+# Edit .secrets.local.cue with your actual API keys
+```
+
+### 2. Install dependencies and run
+
+```bash
+go mod tidy
+encore run
+```
+
+## Secrets Configuration
+
+This project uses Encore's built-in secrets management for secure API key storage. Secrets are defined in the code and managed through Encore's infrastructure.
+
+### Required Secrets
+
+- `GroqAPIKey` - API key for Groq service
+- `OpenRouterAPIKey` - API key for OpenRouter service  
+- `GeminiAPIKey` - API key for Gemini service
+- `AtlasAPIKey` - API key for Atlas service
+- `ChutesAPIKey` - API key for Chutes service
+
+### Security Benefits
+
+- ✅ Secrets are encrypted using Google Cloud KMS
+- ✅ Never stored in plain text in your code
+- ✅ Environment-specific values (dev, staging, prod)
+- ✅ Automatic synchronization across team members
+- ✅ No risk of accidentally committing secrets
 
 ## Architecture
 

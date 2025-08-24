@@ -7,3 +7,7 @@ encore.gen.cue
 .env
 .env.local
 .env.*.local
+
+# Encore secrets (keep these secure!)
+.secrets.local.cue
+.secrets.*.cue
