@@ -27,6 +27,16 @@ func (cs *ChatService) ProcessChatCompletion(req *models.ChatRequest) (*models.C
 		return nil, fmt.Errorf("prompt is required")
 	}
 
+	// Apply default values if not provided
+	if req.Temperature == nil {
+		defaultTemp := 0.5
+		req.Temperature = &defaultTemp
+	}
+	if req.MaxTokens == nil {
+		defaultMaxTokens := 1000
+		req.MaxTokens = &defaultMaxTokens
+	}
+
 	// Get provider (default to groq if not specified)
 	providerName := req.Provider
 	if providerName == "" {

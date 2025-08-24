@@ -36,7 +36,7 @@ func (c *ChutesProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 
 	model := req.Model
 	if model == "" {
-		model = "chutes-default"
+		model = "zai-org/GLM-4.5-FP8"
 	}
 
 	payload := map[string]interface{}{
@@ -58,7 +58,7 @@ func (c *ChutesProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 	}
 
 	// Create HTTP request (Note: This is a placeholder URL - adjust as needed for actual Chutes API)
-	httpReq, err := http.NewRequest("POST", "https://api.chutes.ai/v1/chat/completions", bytes.NewBuffer(jsonData))
+	httpReq, err := http.NewRequest("POST", "https://llm.chutes.ai/v1/chat/completions", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}

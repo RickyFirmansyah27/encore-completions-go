@@ -4,8 +4,8 @@ package models
 type ChatRequest struct {
 	Prompt      string   `json:"prompt"`
 	Model       string   `json:"model,omitempty"`
-	Temperature *float64 `json:"temperature,omitempty"`
-	MaxTokens   *int     `json:"max_tokens,omitempty"`
+	Temperature *float64 `json:"temperature,omitempty" default:"0.5"`
+	MaxTokens   *int     `json:"max_tokens,omitempty" default:"1000"`
 	Stream      *bool    `json:"stream,omitempty"`
 	Provider    string   `json:"provider,omitempty"`
 }
