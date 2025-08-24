@@ -1,6 +1,7 @@
 package route
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -15,6 +17,35 @@ import (
 //
 //encore:service
 type Service struct{}
+
+// loadEnvFile loads environment variables from .env file
+func loadEnvFile() {
+	file, err := os.Open(".env")
+	if err != nil {
+		// .env file doesn't exist, that's okay
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			// Remove quotes if present
+			if len(value) >= 2 && ((value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'')) {
+				value = value[1 : len(value)-1]
+			}
+			os.Setenv(key, value)
+		}
+	}
+}
 
 // getAPIKey returns the API key for the specified provider
 func (s *Service) getAPIKey(provider string) string {
