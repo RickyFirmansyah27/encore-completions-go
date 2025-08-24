@@ -9,6 +9,17 @@ import (
 	"encore.app/src/providers"
 )
 
+// Constants for default values and status messages
+const (
+	DefaultProvider       = "groq"
+	DefaultTemperature    = 0.5
+	DefaultMaxTokens      = 1000
+	StatusHealthy         = "healthy"
+	StatusNoAPIKeys       = "no_api_keys"
+	StatusInvalidRequest  = "invalid_request"
+	StatusInvalidProvider = "invalid_provider"
+)
+
 // ChatService handles chat completion business logic
 type ChatService struct {
 	config *config.Config
@@ -21,27 +32,37 @@ func NewChatService(cfg *config.Config) *ChatService {
 	}
 }
 
-// ProcessChatCompletion processes a chat completion request
-func (cs *ChatService) ProcessChatCompletion(req *models.ChatRequest) (*models.ChatResponse, error) {
-	if req.Prompt == "" {
-		return nil, fmt.Errorf("prompt is required")
-	}
-
-	// Apply default values if not provided
+// setDefaults applies default values to the request if not provided
+func setDefaults(req *models.ChatRequest) {
 	if req.Temperature == nil {
-		defaultTemp := 0.5
+		defaultTemp := DefaultTemperature
 		req.Temperature = &defaultTemp
 	}
 	if req.MaxTokens == nil {
-		defaultMaxTokens := 1000
+		defaultMaxTokens := DefaultMaxTokens
 		req.MaxTokens = &defaultMaxTokens
 	}
+}
 
-	// Get provider (default to groq if not specified)
-	providerName := req.Provider
+// getProviderName returns the provider name with default fallback
+func getProviderName(providerName string) string {
 	if providerName == "" {
-		providerName = "groq"
+		return DefaultProvider
 	}
+	return providerName
+}
+
+// ProcessChatCompletion processes a chat completion request
+func (cs *ChatService) ProcessChatCompletion(req *models.ChatRequest) (*models.ChatResponse, error) {
+	if req.Prompt == "" {
+		return nil, fmt.Errorf("invalid request: prompt cannot be empty")
+	}
+
+	// Apply default values
+	setDefaults(req)
+
+	// Get provider name with default
+	providerName := getProviderName(req.Provider)
 
 	// Get API key
 	apiKey := cs.config.GetAPIKey(providerName)
@@ -62,7 +83,7 @@ func (cs *ChatService) ProcessChatCompletion(req *models.ChatRequest) (*models.C
 // GetHealthStatus returns the health status of the service
 func (cs *ChatService) GetHealthStatus() *models.HealthResponse {
 	// Check if at least one API key is available
-	chatStatus := "healthy"
+	chatStatus := StatusHealthy
 	hasAnyKey := false
 
 	for _, provider := range cs.config.GetSupportedProviders() {
@@ -73,11 +94,11 @@ func (cs *ChatService) GetHealthStatus() *models.HealthResponse {
 	}
 
 	if !hasAnyKey {
-		chatStatus = "no_api_keys"
+		chatStatus = StatusNoAPIKeys
 	}
 
 	return &models.HealthResponse{
-		Status:    "healthy",
+		Status:    StatusHealthy,
 		Timestamp: time.Now().Format(time.RFC3339),
 		Services: map[string]string{
 			"chat": chatStatus,
@@ -97,7 +118,15 @@ func (cs *ChatService) TestProvider(req *models.TestProviderRequest) *models.Tes
 	if req.Provider == "" {
 		return &models.TestProviderResponse{
 			Provider: req.Provider,
-			Status:   "invalid_request",
+			Status:   StatusInvalidRequest,
+		}
+	}
+
+	// Validate provider name first
+	if !cs.config.IsValidProvider(req.Provider) {
+		return &models.TestProviderResponse{
+			Provider: req.Provider,
+			Status:   StatusInvalidProvider,
 		}
 	}
 
@@ -106,20 +135,12 @@ func (cs *ChatService) TestProvider(req *models.TestProviderRequest) *models.Tes
 	if apiKey == "" {
 		return &models.TestProviderResponse{
 			Provider: req.Provider,
-			Status:   "no_api_key",
-		}
-	}
-
-	// Validate provider name
-	if !cs.config.IsValidProvider(req.Provider) {
-		return &models.TestProviderResponse{
-			Provider: req.Provider,
-			Status:   "invalid_provider",
+			Status:   StatusNoAPIKeys,
 		}
 	}
 
 	return &models.TestProviderResponse{
 		Provider: req.Provider,
-		Status:   "healthy",
+		Status:   StatusHealthy,
 	}
 }
