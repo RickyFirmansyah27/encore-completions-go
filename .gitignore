@@ -2,3 +2,8 @@
 encore.gen.go
 encore.gen.cue
 /encore.gen
+
+# Environment variables
+.env
+.env.local
+.env.*.local

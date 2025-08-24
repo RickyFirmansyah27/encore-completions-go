@@ -11,27 +11,21 @@ import (
 	"encore.app/src/models"
 )
 
-// Provider interface defines the contract for AI providers
-type Provider interface {
-	ChatCompletion(req *models.ChatRequest, apiKey string) (*models.ChatResponse, error)
-	GetName() string
-}
+// AtlasProvider implements the Provider interface for Atlas API
+type AtlasProvider struct{}
 
-// GroqProvider implements the Provider interface for Groq API
-type GroqProvider struct{}
-
-// NewGroqProvider creates a new Groq provider instance
-func NewGroqProvider() Provider {
-	return &GroqProvider{}
+// NewAtlasProvider creates a new Atlas provider instance
+func NewAtlasProvider() Provider {
+	return &AtlasProvider{}
 }
 
 // GetName returns the provider name
-func (g *GroqProvider) GetName() string {
-	return "groq"
+func (a *AtlasProvider) GetName() string {
+	return "atlas"
 }
 
-// ChatCompletion calls the Groq API for chat completion
-func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*models.ChatResponse, error) {
+// ChatCompletion calls the Atlas API for chat completion
+func (a *AtlasProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*models.ChatResponse, error) {
 	// Prepare the request payload
 	messages := []map[string]string{
 		{
@@ -42,7 +36,7 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 
 	model := req.Model
 	if model == "" {
-		model = "llama3-8b-8192"
+		model = "openai/gpt-oss-20b"
 	}
 
 	payload := map[string]interface{}{
@@ -63,8 +57,8 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 		return nil, fmt.Errorf("failed to marshal request: %v", err)
 	}
 
-	// Create HTTP request
-	httpReq, err := http.NewRequest("POST", "https://api.groq.com/openai/v1/chat/completions", bytes.NewBuffer(jsonData))
+	// Create HTTP request (Note: This is a placeholder URL - adjust as needed for actual Atlas API)
+	httpReq, err := http.NewRequest("POST", "https://api.atlascloud.ai/v1/chat/completions", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
@@ -91,8 +85,8 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response
-	var groqResponse struct {
+	// Parse response (assuming OpenAI-compatible format)
+	var atlasResponse struct {
 		ID      string `json:"id"`
 		Object  string `json:"object"`
 		Created int64  `json:"created"`
@@ -112,25 +106,25 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 		} `json:"usage"`
 	}
 
-	if err := json.Unmarshal(body, &groqResponse); err != nil {
+	if err := json.Unmarshal(body, &atlasResponse); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %v", err)
 	}
 
 	// Convert to our response format
 	response := &models.ChatResponse{
-		ID:      groqResponse.ID,
-		Object:  groqResponse.Object,
-		Created: groqResponse.Created,
-		Model:   groqResponse.Model,
-		Choices: make([]models.Choice, len(groqResponse.Choices)),
+		ID:      atlasResponse.ID,
+		Object:  atlasResponse.Object,
+		Created: atlasResponse.Created,
+		Model:   atlasResponse.Model,
+		Choices: make([]models.Choice, len(atlasResponse.Choices)),
 		Usage: models.Usage{
-			PromptTokens:     groqResponse.Usage.PromptTokens,
-			CompletionTokens: groqResponse.Usage.CompletionTokens,
-			TotalTokens:      groqResponse.Usage.TotalTokens,
+			PromptTokens:     atlasResponse.Usage.PromptTokens,
+			CompletionTokens: atlasResponse.Usage.CompletionTokens,
+			TotalTokens:      atlasResponse.Usage.TotalTokens,
 		},
 	}
 
-	for i, choice := range groqResponse.Choices {
+	for i, choice := range atlasResponse.Choices {
 		response.Choices[i] = models.Choice{
 			Index: choice.Index,
 			Message: models.ChatMessage{
@@ -142,22 +136,4 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 	}
 
 	return response, nil
-}
-
-// GetProvider returns the appropriate provider based on name
-func GetProvider(providerName string) Provider {
-	switch providerName {
-	case "groq":
-		return NewGroqProvider()
-	case "openrouter":
-		return NewOpenRouterProvider()
-	case "gemini":
-		return NewGeminiProvider()
-	case "atlas":
-		return NewAtlasProvider()
-	case "chutes":
-		return NewChutesProvider()
-	default:
-		return nil
-	}
 }

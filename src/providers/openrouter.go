@@ -11,27 +11,21 @@ import (
 	"encore.app/src/models"
 )
 
-// Provider interface defines the contract for AI providers
-type Provider interface {
-	ChatCompletion(req *models.ChatRequest, apiKey string) (*models.ChatResponse, error)
-	GetName() string
-}
+// OpenRouterProvider implements the Provider interface for OpenRouter API
+type OpenRouterProvider struct{}
 
-// GroqProvider implements the Provider interface for Groq API
-type GroqProvider struct{}
-
-// NewGroqProvider creates a new Groq provider instance
-func NewGroqProvider() Provider {
-	return &GroqProvider{}
+// NewOpenRouterProvider creates a new OpenRouter provider instance
+func NewOpenRouterProvider() Provider {
+	return &OpenRouterProvider{}
 }
 
 // GetName returns the provider name
-func (g *GroqProvider) GetName() string {
-	return "groq"
+func (o *OpenRouterProvider) GetName() string {
+	return "openrouter"
 }
 
-// ChatCompletion calls the Groq API for chat completion
-func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*models.ChatResponse, error) {
+// ChatCompletion calls the OpenRouter API for chat completion
+func (o *OpenRouterProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*models.ChatResponse, error) {
 	// Prepare the request payload
 	messages := []map[string]string{
 		{
@@ -42,7 +36,7 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 
 	model := req.Model
 	if model == "" {
-		model = "llama3-8b-8192"
+		model = "openai/gpt-3.5-turbo"
 	}
 
 	payload := map[string]interface{}{
@@ -64,7 +58,7 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 	}
 
 	// Create HTTP request
-	httpReq, err := http.NewRequest("POST", "https://api.groq.com/openai/v1/chat/completions", bytes.NewBuffer(jsonData))
+	httpReq, err := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
@@ -72,6 +66,8 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 	// Set headers
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+	httpReq.Header.Set("HTTP-Referer", "https://encore-completion-go")
+	httpReq.Header.Set("X-Title", "Encore Chat Completion")
 
 	// Make the request
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -91,8 +87,8 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response
-	var groqResponse struct {
+	// Parse response (OpenRouter uses OpenAI-compatible format)
+	var openRouterResponse struct {
 		ID      string `json:"id"`
 		Object  string `json:"object"`
 		Created int64  `json:"created"`
@@ -112,25 +108,25 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 		} `json:"usage"`
 	}
 
-	if err := json.Unmarshal(body, &groqResponse); err != nil {
+	if err := json.Unmarshal(body, &openRouterResponse); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %v", err)
 	}
 
 	// Convert to our response format
 	response := &models.ChatResponse{
-		ID:      groqResponse.ID,
-		Object:  groqResponse.Object,
-		Created: groqResponse.Created,
-		Model:   groqResponse.Model,
-		Choices: make([]models.Choice, len(groqResponse.Choices)),
+		ID:      openRouterResponse.ID,
+		Object:  openRouterResponse.Object,
+		Created: openRouterResponse.Created,
+		Model:   openRouterResponse.Model,
+		Choices: make([]models.Choice, len(openRouterResponse.Choices)),
 		Usage: models.Usage{
-			PromptTokens:     groqResponse.Usage.PromptTokens,
-			CompletionTokens: groqResponse.Usage.CompletionTokens,
-			TotalTokens:      groqResponse.Usage.TotalTokens,
+			PromptTokens:     openRouterResponse.Usage.PromptTokens,
+			CompletionTokens: openRouterResponse.Usage.CompletionTokens,
+			TotalTokens:      openRouterResponse.Usage.TotalTokens,
 		},
 	}
 
-	for i, choice := range groqResponse.Choices {
+	for i, choice := range openRouterResponse.Choices {
 		response.Choices[i] = models.Choice{
 			Index: choice.Index,
 			Message: models.ChatMessage{
@@ -142,22 +138,4 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 	}
 
 	return response, nil
-}
-
-// GetProvider returns the appropriate provider based on name
-func GetProvider(providerName string) Provider {
-	switch providerName {
-	case "groq":
-		return NewGroqProvider()
-	case "openrouter":
-		return NewOpenRouterProvider()
-	case "gemini":
-		return NewGeminiProvider()
-	case "atlas":
-		return NewAtlasProvider()
-	case "chutes":
-		return NewChutesProvider()
-	default:
-		return nil
-	}
 }
