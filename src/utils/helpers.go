@@ -1,25 +1,36 @@
 package utils
 
 import (
-	"fmt"
-	"time"
+	"encoding/base64"
+	"io/ioutil"
 )
 
-// GetModel returns the model name, using default if not provided
-func GetModel(requestModel string) string {
-	if requestModel != "" {
-		return requestModel
+// EncodeImageToBase64 reads an image file and encodes it to base64
+func EncodeImageToBase64(imagePath string) (string, error) {
+	// Read the image file
+	imageData, err := ioutil.ReadFile(imagePath)
+	if err != nil {
+		return "", err
 	}
-	return "llama3-8b-8192" // default
+
+	// Encode to base64
+	encoded := base64.StdEncoding.EncodeToString(imageData)
+	return encoded, nil
 }
 
-// GenerateID generates a simple ID based on current timestamp
-func GenerateID() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
-}
+// SaveBase64ToImage decodes base64 image data and saves it to a file
+func SaveBase64ToImage(base64Data, outputPath string) error {
+	// Decode base64 data
+	decoded, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return err
+	}
 
-// CountTokens provides a simple approximation of token count
-func CountTokens(text string) int {
-	// Simple approximation: 1 token per 4 characters
-	return len(text) / 4
+	// Write to file
+	err = ioutil.WriteFile(outputPath, decoded, 0644)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

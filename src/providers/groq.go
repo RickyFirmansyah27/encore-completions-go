@@ -8,20 +8,15 @@ import (
 	"net/http"
 	"time"
 
+	"encore.app/src/config"
 	"encore.app/src/models"
 )
-
-// Provider interface defines the contract for AI providers
-type Provider interface {
-	ChatCompletion(req *models.ChatRequest, apiKey string) (*models.ChatResponse, error)
-	GetName() string
-}
 
 // GroqProvider implements the Provider interface for Groq API
 type GroqProvider struct{}
 
 // NewGroqProvider creates a new Groq provider instance
-func NewGroqProvider() Provider {
+func NewGroqProvider(cfg *config.Config) *GroqProvider {
 	return &GroqProvider{}
 }
 
@@ -33,16 +28,31 @@ func (g *GroqProvider) GetName() string {
 // ChatCompletion calls the Groq API for chat completion
 func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*models.ChatResponse, error) {
 	// Prepare the request payload
-	messages := []map[string]string{
-		{
-			"role":    "user",
-			"content": req.Prompt,
-		},
+	var messages []interface{}
+
+	var contentParts []models.ContentPart
+	contentParts = append(contentParts, models.ContentPart{
+		Type: "text",
+		Text: req.Prompt,
+	})
+
+	if req.WithImage && req.ImageData != "" {
+		contentParts = append(contentParts, models.ContentPart{
+			Type: "image_url",
+			ImageURL: &models.ImageURL{
+				URL: "data:image/jpeg;base64," + req.ImageData,
+			},
+		})
 	}
+
+	messages = append(messages, map[string]interface{}{
+		"role":    "user",
+		"content": contentParts,
+	})
 
 	model := req.Model
 	if model == "" {
-		model = "llama3-8b-8192"
+		model = "openai/gpt-oss-120b"
 	}
 
 	payload := map[string]interface{}{
@@ -134,30 +144,17 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 		response.Choices[i] = models.Choice{
 			Index: choice.Index,
 			Message: models.ChatMessage{
-				Role:    choice.Message.Role,
-				Content: choice.Message.Content,
+				Role: choice.Message.Role,
+				Content: []models.ContentPart{
+					{
+						Type: "text",
+						Text: choice.Message.Content,
+					},
+				},
 			},
 			FinishReason: choice.FinishReason,
 		}
 	}
 
 	return response, nil
-}
-
-// GetProvider returns the appropriate provider based on name
-func GetProvider(providerName string) Provider {
-	switch providerName {
-	case "groq":
-		return NewGroqProvider()
-	case "openrouter":
-		return NewOpenRouterProvider()
-	case "gemini":
-		return NewGeminiProvider()
-	case "atlas":
-		return NewAtlasProvider()
-	case "chutes":
-		return NewChutesProvider()
-	default:
-		return nil
-	}
 }

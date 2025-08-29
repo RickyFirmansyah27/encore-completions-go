@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"encore.app/src/config"
 	"encore.app/src/models"
 )
 
@@ -15,7 +16,7 @@ import (
 type OpenRouterProvider struct{}
 
 // NewOpenRouterProvider creates a new OpenRouter provider instance
-func NewOpenRouterProvider() Provider {
+func NewOpenRouterProvider(cfg *config.Config) *OpenRouterProvider {
 	return &OpenRouterProvider{}
 }
 
@@ -27,16 +28,31 @@ func (o *OpenRouterProvider) GetName() string {
 // ChatCompletion calls the OpenRouter API for chat completion
 func (o *OpenRouterProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*models.ChatResponse, error) {
 	// Prepare the request payload
-	messages := []map[string]string{
-		{
-			"role":    "user",
-			"content": req.Prompt,
-		},
+	var messages []interface{}
+
+	var contentParts []models.ContentPart
+	contentParts = append(contentParts, models.ContentPart{
+		Type: "text",
+		Text: req.Prompt,
+	})
+
+	if req.WithImage && req.ImageData != "" {
+		contentParts = append(contentParts, models.ContentPart{
+			Type: "image_url",
+			ImageURL: &models.ImageURL{
+				URL: "data:image/jpeg;base64," + req.ImageData,
+			},
+		})
 	}
+
+	messages = append(messages, map[string]interface{}{
+		"role":    "user",
+		"content": contentParts,
+	})
 
 	model := req.Model
 	if model == "" {
-		model = "openai/gpt-3.5-turbo"
+		model = "deepseek/deepseek-chat-v3.1:free"
 	}
 
 	payload := map[string]interface{}{
@@ -130,8 +146,13 @@ func (o *OpenRouterProvider) ChatCompletion(req *models.ChatRequest, apiKey stri
 		response.Choices[i] = models.Choice{
 			Index: choice.Index,
 			Message: models.ChatMessage{
-				Role:    choice.Message.Role,
-				Content: choice.Message.Content,
+				Role: choice.Message.Role,
+				Content: []models.ContentPart{
+					{
+						Type: "text",
+						Text: choice.Message.Content,
+					},
+				},
 			},
 			FinishReason: choice.FinishReason,
 		}

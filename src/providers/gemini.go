@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"encore.app/src/config"
 	"encore.app/src/models"
 )
 
@@ -16,7 +17,7 @@ import (
 type GeminiProvider struct{}
 
 // NewGeminiProvider creates a new Gemini provider instance
-func NewGeminiProvider() Provider {
+func NewGeminiProvider(cfg *config.Config) *GeminiProvider {
 	return &GeminiProvider{}
 }
 
@@ -33,14 +34,25 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 		model = "gemini-2.5-pro"
 	}
 
-	payload := map[string]interface{}{
-		"contents": []map[string]interface{}{
-			{
-				"parts": []map[string]string{
-					{"text": req.Prompt},
-				},
+	parts := []map[string]interface{}{
+		{"text": req.Prompt},
+	}
+
+	if req.WithImage && req.ImageData != "" {
+		parts = append(parts, map[string]interface{}{
+			"inline_data": map[string]string{
+				"mime_type": "image/jpeg",
+				"data":      req.ImageData,
 			},
-		},
+		})
+	}
+
+	contents := []map[string]interface{}{
+		{"parts": parts},
+	}
+
+	payload := map[string]interface{}{
+		"contents": contents,
 	}
 
 	// Add generation config if temperature or max tokens are specified
@@ -132,8 +144,13 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 		response.Choices[i] = models.Choice{
 			Index: i,
 			Message: models.ChatMessage{
-				Role:    "assistant",
-				Content: content,
+				Role: "assistant",
+				Content: []models.ContentPart{
+					{
+						Type: "text",
+						Text: content,
+					},
+				},
 			},
 			FinishReason: strings.ToLower(candidate.FinishReason),
 		}

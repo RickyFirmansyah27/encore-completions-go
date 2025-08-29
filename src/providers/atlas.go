@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"encore.app/src/config"
 	"encore.app/src/models"
 )
 
@@ -15,7 +16,7 @@ import (
 type AtlasProvider struct{}
 
 // NewAtlasProvider creates a new Atlas provider instance
-func NewAtlasProvider() Provider {
+func NewAtlasProvider(cfg *config.Config) *AtlasProvider {
 	return &AtlasProvider{}
 }
 
@@ -27,12 +28,27 @@ func (a *AtlasProvider) GetName() string {
 // ChatCompletion calls the Atlas API for chat completion
 func (a *AtlasProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*models.ChatResponse, error) {
 	// Prepare the request payload
-	messages := []map[string]string{
-		{
-			"role":    "user",
-			"content": req.Prompt,
-		},
+	var messages []interface{}
+
+	var contentParts []models.ContentPart
+	contentParts = append(contentParts, models.ContentPart{
+		Type: "text",
+		Text: req.Prompt,
+	})
+
+	if req.WithImage && req.ImageData != "" {
+		contentParts = append(contentParts, models.ContentPart{
+			Type: "image_url",
+			ImageURL: &models.ImageURL{
+				URL: "data:image/jpeg;base64," + req.ImageData,
+			},
+		})
 	}
+
+	messages = append(messages, map[string]interface{}{
+		"role":    "user",
+		"content": contentParts,
+	})
 
 	model := req.Model
 	if model == "" {
@@ -128,8 +144,13 @@ func (a *AtlasProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (
 		response.Choices[i] = models.Choice{
 			Index: choice.Index,
 			Message: models.ChatMessage{
-				Role:    choice.Message.Role,
-				Content: choice.Message.Content,
+				Role: choice.Message.Role,
+				Content: []models.ContentPart{
+					{
+						Type: "text",
+						Text: choice.Message.Content,
+					},
+				},
 			},
 			FinishReason: choice.FinishReason,
 		}

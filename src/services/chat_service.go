@@ -27,6 +27,7 @@ type ChatService struct {
 
 // NewChatService creates a new chat service instance
 func NewChatService(cfg *config.Config) *ChatService {
+	providers.InitProviders(cfg)
 	return &ChatService{
 		config: cfg,
 	}
@@ -54,12 +55,38 @@ func getProviderName(providerName string) string {
 
 // ProcessChatCompletion processes a chat completion request
 func (cs *ChatService) ProcessChatCompletion(req *models.ChatRequest) (*models.ChatResponse, error) {
-	if req.Prompt == "" {
-		return nil, fmt.Errorf("invalid request: prompt cannot be empty")
+	if req.Prompt == "" && !req.WithImage {
+		return nil, fmt.Errorf("invalid request: prompt cannot be empty if not sending an image")
 	}
 
 	// Apply default values
 	setDefaults(req)
+
+	// Construct ContentParts
+	var contentParts []models.ContentPart
+	if req.Prompt != "" {
+		contentParts = append(contentParts, models.ContentPart{
+			Type: "text",
+			Text: req.Prompt,
+		})
+	}
+	if req.WithImage && req.ImageData != "" {
+		contentParts = append(contentParts, models.ContentPart{
+			Type: "image_url",
+			ImageURL: &models.ImageURL{
+				URL: req.ImageData,
+			},
+		})
+	}
+
+	// Create ChatMessage
+	chatMessage := models.ChatMessage{
+		Role:    "user",
+		Content: contentParts,
+	}
+
+	// Assign the constructed message to the original request's Messages field
+	req.Messages = []models.ChatMessage{chatMessage}
 
 	// Get provider name with default
 	providerName := getProviderName(req.Provider)
@@ -71,9 +98,9 @@ func (cs *ChatService) ProcessChatCompletion(req *models.ChatRequest) (*models.C
 	}
 
 	// Get provider instance
-	provider := providers.GetProvider(providerName)
-	if provider == nil {
-		return nil, fmt.Errorf("unsupported provider: %s", providerName)
+	provider, err := providers.GetProvider(providerName)
+	if err != nil {
+		return nil, err
 	}
 
 	// Call the provider

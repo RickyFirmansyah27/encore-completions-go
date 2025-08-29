@@ -2,18 +2,33 @@ package models
 
 // ChatRequest represents a chat completion request
 type ChatRequest struct {
-	Prompt      string   `json:"prompt"`
-	Model       string   `json:"model,omitempty"`
-	Temperature *float64 `json:"temperature,omitempty" default:"0.5"`
-	MaxTokens   *int     `json:"max_tokens,omitempty" default:"1000"`
-	Stream      *bool    `json:"stream,omitempty"`
-	Provider    string   `json:"provider,omitempty"`
+	Messages    []ChatMessage `json:"messages"` // Added to support multi-modal
+	Prompt      string        `json:"prompt"`
+	Model       string        `json:"model,omitempty"`
+	Temperature *float64      `json:"temperature,omitempty" default:"0.5"`
+	MaxTokens   *int          `json:"max_tokens,omitempty" default:"1000"`
+	Stream      *bool         `json:"stream,omitempty"`
+	Provider    string        `json:"provider,omitempty"`
+	WithImage   bool          `json:"withImage,omitempty"`
+	ImageData   string        `json:"imageData,omitempty"`
+}
+
+// ContentPart represents a part of the content (text or image)
+type ContentPart struct {
+	Type     string    `json:"type"`
+	Text     string    `json:"text,omitempty"`
+	ImageURL *ImageURL `json:"image_url,omitempty"`
+}
+
+// ImageURL represents an image URL
+type ImageURL struct {
+	URL string `json:"url"`
 }
 
 // ChatMessage represents a single message in a chat conversation
 type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string        `json:"role"`
+	Content []ContentPart `json:"content"`
 }
 
 // Choice represents a choice in the completion response
