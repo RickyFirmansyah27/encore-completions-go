@@ -2,6 +2,7 @@ package providers
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,6 +25,39 @@ func NewGeminiProvider(cfg *config.Config) *GeminiProvider {
 // GetName returns the provider name
 func (g *GeminiProvider) GetName() string {
 	return "gemini"
+}
+
+// downloadImageToBase64 downloads an image from HTTP/HTTPS URL and returns base64 encoded data with MIME type
+func (g *GeminiProvider) downloadImageToBase64(url string) (string, string, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	resp, err := client.Get(url)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to download image: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("HTTP error %d downloading image", resp.StatusCode)
+	}
+
+	imageData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read image data: %v", err)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "image/jpeg" // default fallback
+	}
+
+	// Validate content type
+	if !strings.HasPrefix(contentType, "image/") {
+		return "", "", fmt.Errorf("URL does not point to an image (Content-Type: %s)", contentType)
+	}
+
+	base64Data := base64.StdEncoding.EncodeToString(imageData)
+	return base64Data, contentType, nil
 }
 
 // ChatCompletion calls the Gemini API for chat completion
@@ -57,6 +91,19 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 					parts = append(parts, map[string]interface{}{
 						"inline_data": map[string]string{
 							"mime_type": "image/png",
+							"data":      base64Data,
+						},
+					})
+				} else if strings.HasPrefix(dataURI, "http://") || strings.HasPrefix(dataURI, "https://") {
+					// Download image from HTTP/HTTPS URL and convert to base64
+					base64Data, mimeType, err := g.downloadImageToBase64(dataURI)
+					if err != nil {
+						return nil, fmt.Errorf("failed to download image: %v", err)
+					}
+
+					parts = append(parts, map[string]interface{}{
+						"inline_data": map[string]string{
+							"mime_type": mimeType,
 							"data":      base64Data,
 						},
 					})

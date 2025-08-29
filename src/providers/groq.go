@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"encore.app/src/config"
@@ -27,6 +29,8 @@ func (g *GroqProvider) GetName() string {
 
 // ChatCompletion calls the Groq API for chat completion
 func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*models.ChatResponse, error) {
+	log.Printf("[GROQ] Starting ChatCompletion request for model: %s", req.Model)
+
 	// Prepare the request payload
 	messages := make([]map[string]interface{}, 0, len(req.Messages))
 	for _, msg := range req.Messages {
@@ -38,12 +42,27 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 					"text": part.Text,
 				})
 			} else if part.Type == "image_url" && part.ImageURL != nil {
+				log.Printf("[GROQ] Processing image URL: %s", part.ImageURL.URL)
+
+				// Validate the image URL format and accessibility
+				if strings.TrimSpace(part.ImageURL.URL) == "" {
+					log.Printf("[GROQ] Error: Empty image URL")
+					return nil, fmt.Errorf("empty image URL provided")
+				}
+
+				// Check if it's a reasonable URL format
+				if !strings.HasPrefix(part.ImageURL.URL, "http://") && !strings.HasPrefix(part.ImageURL.URL, "https://") {
+					log.Printf("[GROQ] Error: Invalid image URL format, not http/https: %s", part.ImageURL.URL)
+				}
+
 				contentParts = append(contentParts, map[string]interface{}{
 					"type": "image_url",
 					"image_url": map[string]interface{}{
 						"url": part.ImageURL.URL,
 					},
 				})
+
+				log.Printf("[GROQ] Added image URL to content parts: %s", part.ImageURL.URL)
 			}
 		}
 		messages = append(messages, map[string]interface{}{
@@ -100,6 +119,16 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		log.Printf("[GROQ] API request failed with status %d, response body: %s", resp.StatusCode, string(body))
+		log.Printf("[GROQ] Request URL: %s", "https://api.groq.com/openai/v1/chat/completions")
+		log.Printf("[GROQ] Model used: %s", model)
+
+		// Check if the error is specifically about media/image access
+		if resp.StatusCode == 400 && strings.Contains(string(body), "failed to retrieve media") {
+
+			return nil, fmt.Errorf("image access error: %s", string(body))
+		}
+
 		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
