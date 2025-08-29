@@ -28,27 +28,29 @@ func (a *AtlasProvider) GetName() string {
 // ChatCompletion calls the Atlas API for chat completion
 func (a *AtlasProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*models.ChatResponse, error) {
 	// Prepare the request payload
-	var messages []interface{}
-
-	var contentParts []models.ContentPart
-	contentParts = append(contentParts, models.ContentPart{
-		Type: "text",
-		Text: req.Prompt,
-	})
-
-	if req.WithImage && req.ImageData != "" {
-		contentParts = append(contentParts, models.ContentPart{
-			Type: "image_url",
-			ImageURL: &models.ImageURL{
-				URL: "data:image/jpeg;base64," + req.ImageData,
-			},
+	messages := make([]map[string]interface{}, 0, len(req.Messages))
+	for _, msg := range req.Messages {
+		contentParts := make([]map[string]interface{}, 0, len(msg.Content))
+		for _, part := range msg.Content {
+			if part.Type == "text" {
+				contentParts = append(contentParts, map[string]interface{}{
+					"type": "text",
+					"text": part.Text,
+				})
+			} else if part.Type == "image_url" && part.ImageURL != nil {
+				contentParts = append(contentParts, map[string]interface{}{
+					"type": "image_url",
+					"image_url": map[string]interface{}{
+						"url": part.ImageURL.URL,
+					},
+				})
+			}
+		}
+		messages = append(messages, map[string]interface{}{
+			"role":    msg.Role,
+			"content": contentParts,
 		})
 	}
-
-	messages = append(messages, map[string]interface{}{
-		"role":    "user",
-		"content": contentParts,
-	})
 
 	model := req.Model
 	if model == "" {

@@ -34,17 +34,37 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 		model = "gemini-2.5-pro"
 	}
 
-	parts := []map[string]interface{}{
-		{"text": req.Prompt},
-	}
-
-	if req.WithImage && req.ImageData != "" {
-		parts = append(parts, map[string]interface{}{
-			"inline_data": map[string]string{
-				"mime_type": "image/jpeg",
-				"data":      req.ImageData,
-			},
-		})
+	parts := make([]map[string]interface{}, 0)
+	for _, msg := range req.Messages {
+		for _, part := range msg.Content {
+			if part.Type == "text" {
+				parts = append(parts, map[string]interface{}{
+					"text": part.Text,
+				})
+			} else if part.Type == "image_url" && part.ImageURL != nil {
+				// Extract base64 data from the data URI
+				dataURI := part.ImageURL.URL
+				if strings.HasPrefix(dataURI, "data:image/jpeg;base64,") {
+					base64Data := strings.TrimPrefix(dataURI, "data:image/jpeg;base64,")
+					parts = append(parts, map[string]interface{}{
+						"inline_data": map[string]string{
+							"mime_type": "image/jpeg",
+							"data":      base64Data,
+						},
+					})
+				} else if strings.HasPrefix(dataURI, "data:image/png;base64,") {
+					base64Data := strings.TrimPrefix(dataURI, "data:image/png;base64,")
+					parts = append(parts, map[string]interface{}{
+						"inline_data": map[string]string{
+							"mime_type": "image/png",
+							"data":      base64Data,
+						},
+					})
+				} else {
+					return nil, fmt.Errorf("unsupported image data URI format: %s", dataURI)
+				}
+			}
+		}
 	}
 
 	contents := []map[string]interface{}{

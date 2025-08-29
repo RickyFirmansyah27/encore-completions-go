@@ -55,38 +55,12 @@ func getProviderName(providerName string) string {
 
 // ProcessChatCompletion processes a chat completion request
 func (cs *ChatService) ProcessChatCompletion(req *models.ChatRequest) (*models.ChatResponse, error) {
-	if req.Prompt == "" && !req.WithImage {
-		return nil, fmt.Errorf("invalid request: prompt cannot be empty if not sending an image")
+	if len(req.Messages) == 0 {
+		return nil, fmt.Errorf("invalid request: messages cannot be empty")
 	}
 
 	// Apply default values
 	setDefaults(req)
-
-	// Construct ContentParts
-	var contentParts []models.ContentPart
-	if req.Prompt != "" {
-		contentParts = append(contentParts, models.ContentPart{
-			Type: "text",
-			Text: req.Prompt,
-		})
-	}
-	if req.WithImage && req.ImageData != "" {
-		contentParts = append(contentParts, models.ContentPart{
-			Type: "image_url",
-			ImageURL: &models.ImageURL{
-				URL: req.ImageData,
-			},
-		})
-	}
-
-	// Create ChatMessage
-	chatMessage := models.ChatMessage{
-		Role:    "user",
-		Content: contentParts,
-	}
-
-	// Assign the constructed message to the original request's Messages field
-	req.Messages = []models.ChatMessage{chatMessage}
 
 	// Get provider name with default
 	providerName := getProviderName(req.Provider)

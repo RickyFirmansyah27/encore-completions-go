@@ -28,27 +28,30 @@ func (o *OpenRouterProvider) GetName() string {
 // ChatCompletion calls the OpenRouter API for chat completion
 func (o *OpenRouterProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*models.ChatResponse, error) {
 	// Prepare the request payload
-	var messages []interface{}
+	var messages []map[string]interface{}
 
-	var contentParts []models.ContentPart
-	contentParts = append(contentParts, models.ContentPart{
-		Type: "text",
-		Text: req.Prompt,
-	})
-
-	if req.WithImage && req.ImageData != "" {
-		contentParts = append(contentParts, models.ContentPart{
-			Type: "image_url",
-			ImageURL: &models.ImageURL{
-				URL: "data:image/jpeg;base64," + req.ImageData,
-			},
+	for _, msg := range req.Messages {
+		var contentParts []map[string]interface{}
+		for _, part := range msg.Content {
+			if part.Type == "text" {
+				contentParts = append(contentParts, map[string]interface{}{
+					"type": "text",
+					"text": part.Text,
+				})
+			} else if part.Type == "image_url" && part.ImageURL != nil {
+				contentParts = append(contentParts, map[string]interface{}{
+					"type": "image_url",
+					"image_url": map[string]string{
+						"url": part.ImageURL.URL,
+					},
+				})
+			}
+		}
+		messages = append(messages, map[string]interface{}{
+			"role":    msg.Role,
+			"content": contentParts,
 		})
 	}
-
-	messages = append(messages, map[string]interface{}{
-		"role":    "user",
-		"content": contentParts,
-	})
 
 	model := req.Model
 	if model == "" {

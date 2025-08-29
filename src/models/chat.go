@@ -10,7 +10,6 @@ type ChatRequest struct {
 	Stream      *bool         `json:"stream,omitempty"`
 	Provider    string        `json:"provider,omitempty"`
 	WithImage   bool          `json:"withImage,omitempty"`
-	ImageData   string        `json:"imageData,omitempty"`
 }
 
 // ContentPart represents a part of the content (text or image)
