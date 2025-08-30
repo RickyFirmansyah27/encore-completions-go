@@ -73,7 +73,11 @@ func (g *GroqProvider) ChatCompletion(req *models.ChatRequest, apiKey string) (*
 
 	model := req.Model
 	if model == "" {
-		model = "openai/gpt-oss-120b"
+		if req.WithImage {
+			model = "meta-llama/llama-4-maverick-17b-128e-instruct"
+		} else {
+			model = "openai/gpt-oss-120b"
+		}
 	}
 
 	payload := map[string]interface{}{
