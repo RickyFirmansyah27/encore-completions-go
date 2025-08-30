@@ -65,7 +65,7 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 	// Prepare the request payload for Gemini
 	model := req.Model
 	if model == "" {
-		model = "gemini-2.5-pro"
+		model = "gemini-2.5-flash"
 	}
 
 	parts := make([]map[string]interface{}, 0)
