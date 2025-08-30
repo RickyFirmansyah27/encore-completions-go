@@ -65,9 +65,11 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 	// Prepare the request payload for Gemini
 	model := req.Model
 	if model == "" {
+		// Use a model that supports vision and has a larger context window
 		model = "gemini-2.5-flash"
 	}
 
+	// Validate and build contents for the Gemini API
 	parts := make([]map[string]interface{}, 0)
 	for _, msg := range req.Messages {
 		for _, part := range msg.Content {
@@ -76,42 +78,48 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 					"text": part.Text,
 				})
 			} else if part.Type == "image_url" && part.ImageURL != nil {
-				// Extract base64 data from the data URI
 				dataURI := part.ImageURL.URL
-				if strings.HasPrefix(dataURI, "data:image/jpeg;base64,") {
-					base64Data := strings.TrimPrefix(dataURI, "data:image/jpeg;base64,")
-					parts = append(parts, map[string]interface{}{
-						"inline_data": map[string]string{
-							"mime_type": "image/jpeg",
-							"data":      base64Data,
-						},
-					})
-				} else if strings.HasPrefix(dataURI, "data:image/png;base64,") {
-					base64Data := strings.TrimPrefix(dataURI, "data:image/png;base64,")
-					parts = append(parts, map[string]interface{}{
-						"inline_data": map[string]string{
-							"mime_type": "image/png",
-							"data":      base64Data,
-						},
-					})
+				base64Data := ""
+				mimeType := ""
+				var err error
+
+				if strings.HasPrefix(dataURI, "data:image/") {
+					// Extract base64 data and mime type from the data URI
+					partsURI := strings.SplitN(dataURI, ",", 2)
+					if len(partsURI) != 2 {
+						return nil, fmt.Errorf("invalid image data URI format")
+					}
+					header := partsURI[0]
+					base64Data = partsURI[1]
+
+					mimeType = strings.TrimPrefix(header, "data:")
+					mimeType = strings.TrimSuffix(mimeType, ";base64")
+
 				} else if strings.HasPrefix(dataURI, "http://") || strings.HasPrefix(dataURI, "https://") {
 					// Download image from HTTP/HTTPS URL and convert to base64
-					base64Data, mimeType, err := g.downloadImageToBase64(dataURI)
+					base64Data, mimeType, err = g.downloadImageToBase64(dataURI)
 					if err != nil {
 						return nil, fmt.Errorf("failed to download image: %v", err)
 					}
+				} else {
+					return nil, fmt.Errorf("unsupported image URL format: %s", dataURI)
+				}
 
+				// Append inline data part if base64Data is not empty
+				if base64Data != "" && mimeType != "" {
 					parts = append(parts, map[string]interface{}{
 						"inline_data": map[string]string{
 							"mime_type": mimeType,
 							"data":      base64Data,
 						},
 					})
-				} else {
-					return nil, fmt.Errorf("unsupported image data URI format: %s", dataURI)
 				}
 			}
 		}
+	}
+
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("no valid content found in the request messages")
 	}
 
 	contents := []map[string]interface{}{
@@ -129,10 +137,34 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 	}
 	if req.MaxTokens != nil {
 		generationConfig["maxOutputTokens"] = *req.MaxTokens
+	} else {
+		// Set a reasonable default if not specified to avoid early termination
+		generationConfig["maxOutputTokens"] = 2048
 	}
 	if len(generationConfig) > 0 {
 		payload["generationConfig"] = generationConfig
 	}
+
+	// Add safety settings to get feedback
+	safetySettings := []map[string]interface{}{
+		{
+			"category":  "HARM_CATEGORY_DANGEROUS_CONTENT",
+			"threshold": "BLOCK_NONE",
+		},
+		{
+			"category":  "HARM_CATEGORY_HATE_SPEECH",
+			"threshold": "BLOCK_NONE",
+		},
+		{
+			"category":  "HARM_CATEGORY_HARASSMENT",
+			"threshold": "BLOCK_NONE",
+		},
+		{
+			"category":  "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+			"threshold": "BLOCK_NONE",
+		},
+	}
+	payload["safetySettings"] = safetySettings
 
 	// Convert to JSON
 	jsonData, err := json.Marshal(payload)
@@ -178,6 +210,13 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 			} `json:"content"`
 			FinishReason string `json:"finishReason"`
 		} `json:"candidates"`
+		PromptFeedback struct {
+			SafetyRatings []struct {
+				Category    string `json:"category"`
+				Probability string `json:"probability"`
+				Blocked     bool   `json:"blocked"`
+			} `json:"safetyRatings"`
+		} `json:"promptFeedback"`
 		UsageMetadata struct {
 			PromptTokenCount     int `json:"promptTokenCount"`
 			CandidatesTokenCount int `json:"candidatesTokenCount"`
@@ -187,6 +226,20 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 
 	if err := json.Unmarshal(body, &geminiResponse); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	// Check if the prompt was blocked by safety settings
+	if geminiResponse.PromptFeedback.SafetyRatings != nil {
+		for _, rating := range geminiResponse.PromptFeedback.SafetyRatings {
+			if rating.Blocked {
+				return nil, fmt.Errorf("prompt was blocked due to safety rating: category=%s, probability=%s", rating.Category, rating.Probability)
+			}
+		}
+	}
+
+	// Handle case where no candidates are returned
+	if len(geminiResponse.Candidates) == 0 {
+		return nil, fmt.Errorf("gemini API returned no candidates, possibly due to safety filters or lack of generated content")
 	}
 
 	// Convert to our response format
@@ -205,9 +258,15 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 
 	for i, candidate := range geminiResponse.Candidates {
 		content := ""
-		if len(candidate.Content.Parts) > 0 {
+		if len(candidate.Content.Parts) > 0 && candidate.Content.Parts[0].Text != "" {
 			content = candidate.Content.Parts[0].Text
 		}
+
+		finishReason := strings.ToLower(candidate.FinishReason)
+		if finishReason == "max_tokens" && len(candidate.Content.Parts) == 0 {
+			content = "The response was terminated early due to the 'max_tokens' limit. Please try increasing the max_tokens parameter."
+		}
+
 		response.Choices[i] = models.Choice{
 			Index: i,
 			Message: models.ChatMessage{
@@ -219,7 +278,7 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 					},
 				},
 			},
-			FinishReason: strings.ToLower(candidate.FinishReason),
+			FinishReason: finishReason,
 		}
 	}
 
