@@ -55,7 +55,11 @@ func (o *OpenRouterProvider) ChatCompletion(req *models.ChatRequest, apiKey stri
 
 	model := req.Model
 	if model == "" {
-		model = "deepseek/deepseek-chat-v3.1:free"
+		if req.WithImage {
+			model = "google/gemini-2.5-flash-image-preview:free"
+		} else {
+			model = "deepseek/deepseek-chat-v3.1:free"
+		}
 	}
 
 	payload := map[string]interface{}{
