@@ -70,11 +70,12 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 	}
 
 	// Validate and build contents for the Gemini API
-	parts := make([]map[string]interface{}, 0)
+	geminiMessages := make([]map[string]interface{}, 0)
 	for _, msg := range req.Messages {
+		currentMessageParts := make([]map[string]interface{}, 0)
 		for _, part := range msg.Content {
 			if part.Type == "text" {
-				parts = append(parts, map[string]interface{}{
+				currentMessageParts = append(currentMessageParts, map[string]interface{}{
 					"text": part.Text,
 				})
 			} else if part.Type == "image_url" && part.ImageURL != nil {
@@ -107,7 +108,7 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 
 				// Append inline data part if base64Data is not empty
 				if base64Data != "" && mimeType != "" {
-					parts = append(parts, map[string]interface{}{
+					currentMessageParts = append(currentMessageParts, map[string]interface{}{
 						"inline_data": map[string]string{
 							"mime_type": mimeType,
 							"data":      base64Data,
@@ -116,18 +117,23 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 				}
 			}
 		}
+
+		if len(currentMessageParts) == 0 {
+			return nil, fmt.Errorf("no valid content found in message for role %s", msg.Role)
+		}
+
+		geminiMessages = append(geminiMessages, map[string]interface{}{
+			"role":  msg.Role,
+			"parts": currentMessageParts,
+		})
 	}
 
-	if len(parts) == 0 {
-		return nil, fmt.Errorf("no valid content found in the request messages")
-	}
-
-	contents := []map[string]interface{}{
-		{"parts": parts},
+	if len(geminiMessages) == 0 {
+		return nil, fmt.Errorf("no valid messages found in the request")
 	}
 
 	payload := map[string]interface{}{
-		"contents": contents,
+		"contents": geminiMessages,
 	}
 
 	// Add generation config if temperature or max tokens are specified
@@ -165,6 +171,17 @@ func (g *GeminiProvider) ChatCompletion(req *models.ChatRequest, apiKey string) 
 		},
 	}
 	payload["safetySettings"] = safetySettings
+
+	// Add tools if specified in the request
+	if len(req.Tools) > 0 {
+		var tools []map[string]interface{}
+		for range req.Tools {
+			tools = append(tools, map[string]interface{}{
+				"google_search": map[string]interface{}{},
+			})
+		}
+		payload["tools"] = tools
+	}
 
 	// Convert to JSON
 	jsonData, err := json.Marshal(payload)

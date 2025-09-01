@@ -10,7 +10,16 @@ type ChatRequest struct {
 	Stream      *bool         `json:"stream,omitempty"`
 	Provider    string        `json:"provider,omitempty"`
 	WithImage   bool          `json:"withImage,omitempty"`
+	Tools       []Tool        `json:"tools,omitempty"`
 }
+
+// Tool represents a tool that can be used by the model
+type Tool struct {
+	GoogleSearch GoogleSearch `json:"google_search,omitempty"`
+}
+
+// GoogleSearch represents the Google Search tool
+type GoogleSearch struct{}
 
 // ContentPart represents a part of the content (text or image)
 type ContentPart struct {
